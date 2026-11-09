@@ -9,7 +9,7 @@ No video or images are included. Each frame is stored as numbers: the model's 12
 embedding, its calibration weight, head pose, and image-quality measures.
 
 Built by `analysis/build_paper_eval_dataset.py` in
-[jspsych/eye-tracking](https://github.com/jspsych/eye-tracking), from embeddings written by
+[jspsych/saccadejs-model](https://github.com/jspsych/saccadejs-model), from embeddings written by
 `analysis/extract_v1_embeddings.py --save-pose`.
 
 ## Contents
@@ -88,7 +88,7 @@ little-endian typed array, row after row:
 | `eye_aspect_ratio` | float16 | 2 | Left then right eye; low values mean a closing eye |
 | `eye_image_stats` | float16 | 6 | Of the gray eye crop at the camera's resolution: sharpness (variance of the Laplacian), mean brightness (0–255), contrast (SD of brightness), mean brightness of the participant's left eye (the crop's right half; the image is unmirrored) and right eye, and noise: the mean absolute change from the trial's previous frame, at 144 × 36, NaN when that frame was not the one just before |
 | `head_pose` | float16 | 9 | From MediaPipe's landmarks, in normalized image coordinates: `center_x`, `center_y` (midpoint of the outer eye corners), `log_iod` (log interocular distance; larger is nearer the camera), `roll` (radians), `depth`, `width_asym` (log ratio of the eyes' widths; turns with yaw), `z_asym`, `nose_dx`, `nose_dy` (nose bridge offset from the eye midpoint in interocular distances; turn with yaw and pitch). `depth` and `z_asym` use MediaPipe's weak z coordinate. |
-| `head_angles` | float16 | 2 | Yaw and pitch in degrees, from a fit of MediaPipe's canonical face model to the landmarks (`et_util/head_pose.py` in jspsych/eye-tracking). Yaw is positive turned toward the image's right (the participant's left), pitch positive tipped up |
+| `head_angles` | float16 | 2 | Yaw and pitch in degrees, from a fit of MediaPipe's canonical face model to the landmarks (`et_util/head_pose.py` in jspsych/saccadejs-model). Yaw is positive turned toward the image's right (the participant's left), pitch positive tipped up |
 | `eye_crop_px` | float16 | 2 | The eye crop's width and height in camera pixels |
 
 Format 1, the first release, had only sharpness and brightness in `eye_image_stats` (2 values

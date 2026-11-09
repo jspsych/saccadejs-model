@@ -32,7 +32,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jspsych/eye-tracking"
+Homepage = "https://github.com/jspsych/saccadejs-model"
 
 # Single source of truth for the version: et_util/__init__.py.
 [tool.hatch.version]

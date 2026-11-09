@@ -5,7 +5,7 @@ reading a dataset years later can tell which model produced it.
 
 Two repositories, one boundary:
 
-- **`jspsych/eye-tracking`** (here) trains the model, exports it, gates it, and **publishes**
+- **`jspsych/saccadejs-model`** (here) trains the model, exports it, gates it, and **publishes**
   the artifact. `web/export/` is that publisher; `web/rig/` is the hardware timing validation.
 - **`jspsych/saccadejs`** ships the browser library (**saccade.js**) and **consumes** the
   artifact. It has no dependency on `et_util`.

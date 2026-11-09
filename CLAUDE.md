@@ -113,7 +113,7 @@ open in their browser** — it is not headless. Key facts, learned the hard way:
   private repo fails with exit 128 ("could not read Username"). Credentials must live *in the
   runtime*. Either:
   - a `GH_TOKEN` Colab secret (fine-grained PAT, **Resource owner = `jspsych`**, repo =
-    `jspsych/eye-tracking`, Contents: Read-only), then clone with
+    `jspsych/saccadejs-model`, Contents: Read-only), then clone with
     `https://x-access-token:{token}@github.com/...` via `subprocess` (so the token isn't echoed); or
   - `gh auth login` run interactively by the user in the Colab tab (gh is preinstalled).
 - Required **Colab secrets** (🔑 sidebar, "Notebook access" ON), read via
@@ -127,9 +127,9 @@ open in their browser** — it is not headless. Key facts, learned the hard way:
   ```python
   import subprocess, os
   env = dict(os.environ); env["KERAS_BACKEND"] = "jax"; env["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
-  logf = open("/content/eye-tracking/train.log", "w")
+  logf = open("/content/saccadejs-model/train.log", "w")
   proc = subprocess.Popen(["python", "-m", "et_util.train", "--backbone", "densenet",
-                           "--train-epochs", "10"], cwd="/content/eye-tracking", env=env,
+                           "--train-epochs", "10"], cwd="/content/saccadejs-model", env=env,
                           stdout=logf, stderr=subprocess.STDOUT, start_new_session=True)
   ```
   `start_new_session=True` detaches it so it survives bridge drops. Poll with a short cell that

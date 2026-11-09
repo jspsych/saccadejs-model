@@ -13,7 +13,7 @@
 #
 # Colab setup (cells before running this script):
 #   from google.colab import auth; auth.authenticate_user()
-#   !git clone https://github.com/jspsych/eye-tracking && cd eye-tracking
+#   !git clone https://github.com/jspsych/saccadejs-model && cd saccadejs-model
 #   !pip install -q keras keras-hub wandb osfclient
 #   import wandb; wandb.login()
 #

@@ -1,6 +1,6 @@
-# eye-tracking
+# saccadejs-model
 
-[![CI](https://github.com/jspsych/eye-tracking/actions/workflows/ci.yml/badge.svg)](https://github.com/jspsych/eye-tracking/actions/workflows/ci.yml)
+[![CI](https://github.com/jspsych/saccadejs-model/actions/workflows/ci.yml/badge.svg)](https://github.com/jspsych/saccadejs-model/actions/workflows/ci.yml)
 
 Training code for the gaze model behind [SaccadeJS](https://github.com/jspsych/saccadejs):
 a network that turns a 144 × 36 grayscale image of both eyes into a 128-dimensional

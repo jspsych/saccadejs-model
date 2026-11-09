@@ -1,6 +1,6 @@
 # SaccadeJS dataset summary
 
-Format `{FORMAT}`. Built by `analysis/build_dataset_summary.py` in jspsych/eye-tracking.
+Format `{FORMAT}`. Built by `analysis/build_dataset_summary.py` in jspsych/saccadejs-model.
 
 Who is in the SaccadeJS dataset and how they got there, without identifiers. The dataset has two
 collections:
