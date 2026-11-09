@@ -1,0 +1,50 @@
+# Data & model artifacts (sourced from OSF / produced by training)
+data/
+*.tfrecords
+*.tar.gz
+*.tar.gz.part*
+jpg/
+*.h5
+*.keras
+*.weights.h5
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Rendered analysis figures are not committed.
+analysis/figures/*.png
+
+# Notebooks & experiment logs
+.ipynb_checkpoints/
+wandb/
+
+# Web demo
+web/export/.venv/
+web/export/checkpoints/
+web/export/out/
+web/export/fixtures/preproc/
+web/export/fixtures/ridge_fixture.json
+web/export/fixtures/frame_*.png
+web/export/fixtures/landmarks_*.json
+web/export/fixtures/crop_gray_*.png
+web/export/fixtures/resized_*.png
+web/export/fixtures/clahe_*.png
+web/export/parity/node_modules/
+web/export/parity/dist/
+web/rig/panel/node_modules/
+web/rig/panel/dist/
+
+web/export/*.task
+web/export/parity/public/
+
+# Prolific IDs of participants who asked to be removed (read by preprocessing/01_process_subject_data.ipynb)
+excluded_participants.txt

@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screen → Webcam Timing Loopback</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #111;
+        color: #eee;
+        font:
+          13px/1.5 ui-monospace,
+          monospace;
+        max-width: 860px;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      h2 {
+        font-size: 13px;
+        margin: 20px 0 6px;
+        color: #9cf;
+      }
+      p {
+        margin: 0 0 10px;
+        color: #bbb;
+      }
+      #topbar {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 0 12px;
+      }
+      #adv-label {
+        color: #9cf;
+        cursor: pointer;
+        margin: 0;
+        white-space: nowrap;
+      }
+      .note {
+        border: 1px solid #355;
+        background: #142020;
+        color: #bde;
+        padding: 8px 10px;
+        margin: 0 0 12px;
+      }
+      .warn {
+        border: 1px solid #a55;
+        background: #2a1414;
+        color: #f0c0c0;
+        padding: 8px 10px;
+        margin: 0 0 12px;
+      }
+      .hint {
+        color: #888;
+      }
+      fieldset {
+        border: 1px solid #333;
+        padding: 10px 12px;
+        margin: 0 0 12px;
+      }
+      legend {
+        color: #9cf;
+        padding: 0 4px;
+      }
+      label {
+        display: inline-block;
+        margin: 0 16px 6px 0;
+      }
+      input,
+      select,
+      button {
+        background: #1b1b1b;
+        color: #eee;
+        border: 1px solid #444;
+        font: inherit;
+        padding: 3px 6px;
+      }
+      button {
+        cursor: pointer;
+        padding: 5px 12px;
+      }
+      button:disabled {
+        color: #666;
+        cursor: not-allowed;
+      }
+      .preset {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 8px;
+      }
+      .preset button {
+        min-width: 260px;
+        text-align: left;
+      }
+      .preset span {
+        color: #888;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+      textarea {
+        width: 100%;
+        height: 120px;
+        background: #0c0c0c;
+        color: #9a9;
+        border: 1px solid #333;
+        font:
+          11px/1.4 ui-monospace,
+          monospace;
+      }
+      .card {
+        border: 1px solid #333;
+        background: #0c0c0c;
+        padding: 8px 10px;
+        margin: 0 0 8px;
+      }
+      .card .card-title {
+        color: #9cf;
+      }
+      .card .card-verdict {
+        color: #888;
+      }
+      .card .ok {
+        color: #6c6;
+      }
+      .card .warnish {
+        color: #dc6;
+      }
+      .card .bad {
+        color: #e77;
+      }
+      canvas#curve,
+      canvas#rigplot {
+        border: 1px solid #333;
+        background: #0c0c0c;
+        max-width: 100%;
+      }
+      canvas#rig-preview-canvas {
+        border: 1px solid #333;
+        background: #0c0c0c;
+        max-width: 100%;
+        /* Mirrored so moving the LED left moves it left on screen. */
+        transform: scaleX(-1);
+      }
+      video#cam {
+        display: none;
+      }
+      #flash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font:
+          48px/1 ui-monospace,
+          monospace;
+        color: #888;
+      }
+      #status {
+        color: #9cf;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="topbar">
+      <h1>Screen → webcam timing</h1>
+      <label id="adv-label"><input type="checkbox" id="advanced" /> Advanced</label>
+    </div>
+
+    <p id="basic-intro">
+      A gaze sample carries the camera frame's <code>captureTime</code>, but the photons left the
+      screen some milliseconds before that stamp and the camera added more of its own. This page
+      measures that total — the constant to subtract from a gaze timestamp to line it up with what
+      was on screen. The default test only switches the screen between two levels about once a
+      second: no flicker.
+    </p>
+
+    <p class="advanced-only" hidden>
+      Two physical lags stay invisible to JavaScript: <b>display lag</b> (the requestAnimationFrame
+      flip → photons actually leaving the panel) and <b>camera lag</b> (photons → the
+      <code>captureTime</code> stamp), both on the same <code>performance.now()</code> timeline
+      jsPsych uses for stimulus onsets. Their <b>sum</b> is what test 1 measures with no extra
+      hardware: it switches the whole screen between two levels at known times, watches the mean
+      luminance of the webcam image, and cross-correlates the two. The screen lights your face and
+      the room, so this works with a normal user-facing webcam; pointing the camera at the screen
+      gives a stronger signal.
+    </p>
+    <p class="note" id="note-sparse" hidden>
+      <b>Sparse steps, no flicker.</b> The screen switches between two levels at random moments
+      0.5–1&nbsp;s apart — at most one flash per second, a third of the WCAG 2.3.1 / Harding limit
+      of three per second. The timing information is in the edges, not the rate, so ~20 edges over
+      15&nbsp;s pin the lag down to a few ms.
+    </p>
+    <p class="warn" id="warn-fast" hidden>
+      ⚠ <b>Photosensitivity warning (m-sequence mode).</b> After Start and a 3-second countdown the
+      entire screen will flash between the two levels at up to about 8&nbsp;Hz for the chosen
+      duration. Do not use this mode if you have photosensitive epilepsy or are sensitive to
+      flashing light.
+    </p>
+
+    <fieldset id="rig-basic">
+      <legend>rig (optional)</legend>
+      <div style="margin-bottom: 6px">
+        <button id="rig-connect">Connect rig</button>
+        <button id="rig-disconnect" disabled>Disconnect</button>
+        <button id="rig-sync" class="advanced-only" hidden disabled>Sync now</button>
+        <button id="rig-pulse" class="advanced-only" hidden disabled>Pulse</button>
+        <span id="rig-status">not connected</span>
+      </div>
+      <p class="hint">
+        Test 1 needs no rig. Tests 2 and 3 need the photodiode taped to the screen and the LED in
+        the webcam's view (<code>web/rig</code>); connect it here, aim the LED, then run them.
+      </p>
+
+      <div id="aim-row" hidden style="border-top: 1px solid #333; padding-top: 10px">
+        <button id="rig-preview">Preview</button>
+        <button id="rig-locate" disabled>Locate LED</button>
+        <label class="advanced-only" hidden style="margin-left: 12px">
+          view
+          <select id="rig-diff">
+            <option value="off">camera</option>
+            <option value="gray">difference (gray)</option>
+            <option value="red" selected>difference (redness)</option>
+          </select>
+        </label>
+        <p style="margin: 8px 0 6px">
+          Aim the LED: the preview is mirrored, so move it the way it looks. The view subtracts a
+          slowly updated background, so anything blinking stands out. <b>Locate LED</b> blinks it
+          three times and marks where it found it — the analysis uses that same on-minus-off
+          contrast, on whichever of the two planes separates better.
+        </p>
+        <div>
+          <canvas id="rig-preview-canvas" width="320" height="240"></canvas>
+        </div>
+        <div><span id="rig-roi">no LED located</span></div>
+        <div class="advanced-only" hidden>
+          <span id="rig-preview-stats">preview off</span> · mirrored
+        </div>
+      </div>
+
+      <div
+        id="rig-advanced"
+        class="advanced-only"
+        hidden
+        style="border-top: 1px solid #333; padding-top: 10px; margin-top: 10px"
+      >
+        <label>
+          relay
+          <select id="rig-mode">
+            <option value="0">off</option>
+            <option value="1" selected>rising edges</option>
+            <option value="2">both edges</option>
+          </select>
+        </label>
+        <label
+          >delay min (µs)
+          <input id="rig-delay-min" type="number" min="0" max="500000" step="1000" value="100000"
+        /></label>
+        <label
+          >delay max (µs)
+          <input id="rig-delay-max" type="number" min="0" max="500000" step="1000" value="140000"
+        /></label>
+        <label
+          >pulse width (µs)
+          <input
+            id="rig-pulse-width"
+            type="number"
+            min="100"
+            max="1000000"
+            step="1000"
+            value="100000"
+        /></label>
+        <br />
+        <label><input id="rig-train" type="checkbox" /> free pulse train</label>
+        <label
+          >gap min (ms)
+          <input id="rig-gap-min" type="number" min="1" max="10000" step="50" value="600"
+        /></label>
+        <label
+          >gap max (ms)
+          <input id="rig-gap-max" type="number" min="1" max="10000" step="50" value="1200"
+        /></label>
+        <label><input id="rig-edges" type="checkbox" checked /> edge reporting</label>
+        <div><span id="rig-counts">edges 0 · LEDs 0</span></div>
+      </div>
+    </fieldset>
+
+    <fieldset id="presets">
+      <legend>tests</legend>
+      <div class="preset">
+        <button id="preset-1">Test 1 — Loopback</button>
+        <span>no rig needed · 15 s of sparse steps · gives the lag to subtract</span>
+      </div>
+      <div class="preset">
+        <button id="preset-2" disabled>Test 2 — Rig relay validation</button>
+        <span>rig · 60 s · fires the LED a known delay after each screen edge</span>
+      </div>
+      <div class="preset">
+        <button id="preset-3" disabled>Test 3 — Exposure sweep</button>
+        <span>rig · 60 s · free LED pulses map the camera's exposure window</span>
+      </div>
+      <div>
+        <span id="status">idle</span>
+        <span class="hint">· Esc aborts a run</span>
+      </div>
+    </fieldset>
+
+    <fieldset id="settings-fieldset" class="advanced-only" hidden>
+      <legend>settings</legend>
+      <label>
+        mode
+        <select id="mode">
+          <option value="sparse" selected>sparse steps (no flicker)</option>
+          <option value="mseq">m-sequence (fast, flickers)</option>
+        </select>
+      </label>
+      <label>
+        contrast
+        <select id="contrast">
+          <option value="full" selected>black / white</option>
+          <option value="reduced">20% / 80% gray</option>
+        </select>
+      </label>
+      <label
+        >duration (s) <input id="duration" type="number" min="2" max="120" step="1" value="15"
+      /></label>
+      <span id="sparse-settings">
+        <label
+          >gap min (ms) <input id="gapMin" type="number" min="200" max="5000" step="50" value="500"
+        /></label>
+        <label
+          >gap max (ms)
+          <input id="gapMax" type="number" min="200" max="5000" step="50" value="1000"
+        /></label>
+      </span>
+      <span id="mseq-settings" hidden>
+        <label
+          >symbol length (refreshes)
+          <input id="symbolLen" type="number" min="1" max="20" step="1" value="5"
+        /></label>
+        <label>
+          sequence order
+          <select id="order">
+            <option value="7" selected>7 (127 symbols)</option>
+            <option value="8">8 (255 symbols)</option>
+          </select>
+        </label>
+      </span>
+      <div style="margin-top: 8px">
+        <button id="start">Start with these settings</button>
+        <span class="hint">the presets above write these fields, so this shows what was used</span>
+      </div>
+    </fieldset>
+
+    <h2>summary</h2>
+    <div id="summary">
+      <div class="card" id="sum-test1"></div>
+      <div class="card" id="sum-test2"></div>
+      <div class="card" id="sum-test3"></div>
+    </div>
+    <div style="margin-bottom: 12px">
+      <button id="copy">Copy JSON</button>
+      <span class="hint">· the full record of the last run, to send back</span>
+    </div>
+
+    <video id="cam" muted playsinline></video>
+
+    <div class="advanced-only" hidden>
+      <h2>results</h2>
+      <pre id="out">no run yet.</pre>
+
+      <h2>lag statistic vs τ — captureTime variant (shaded = lags consistent with every edge)</h2>
+      <canvas id="curve" width="600" height="160"></canvas>
+
+      <h2>rig</h2>
+      <pre id="rigout">no rig data.</pre>
+
+      <h2>rig scatter — relay residual vs delay, and exposure f vs phase</h2>
+      <canvas id="rigplot" width="600" height="160"></canvas>
+
+      <h2>JSON export</h2>
+      <p>
+        Copy this and paste it somewhere central so runs from several machines/webcams can be
+        compared.
+      </p>
+      <textarea id="json" readonly spellcheck="false"></textarea>
+    </div>
+
+    <script type="module" src="/src/timing.ts"></script>
+  </body>
+</html>

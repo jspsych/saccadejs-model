@@ -1,0 +1,24 @@
+{
+  "name": "saccade-export-parity",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "In-browser parity check: onnxruntime-web (WebGPU) vs the Keras reference embeddings",
+  "scripts": {
+    "assets": "node scripts/link-assets.mjs",
+    "predev": "npm run assets",
+    "dev": "vite",
+    "prebuild": "npm run assets",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
+}

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "eye-tracking"
+dynamic = ["version"]
+description = "Webcam gaze prediction: data pipeline, model training, and analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "tensorflow",
+    "keras>=3",
+    "keras-hub",
+    "mediapipe",
+    "opencv-python",
+    "numpy",
+    "osfclient",
+    "wandb",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# `jax` is here rather than in dependencies on purpose: it is the *default* keras
+# backend (et_util/__init__.py), but training installs jax[tpu] on the Colab VM and
+# the eval-only paths export KERAS_BACKEND=tensorflow. Pinning plain jax as a hard
+# dependency would fight both. CI installs this extra so the backend-selection tests
+# actually run instead of skipping.
+dev = [
+    "pytest",
+    "jax",
+]
+
+[project.urls]
+Homepage = "https://github.com/jspsych/eye-tracking"
+
+# Single source of truth for the version: et_util/__init__.py.
+[tool.hatch.version]
+path = "et_util/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["et_util"]

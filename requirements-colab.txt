@@ -1,0 +1,24 @@
+# Pinned deps for the google-colab-cli LEAN TPU image (colab --tpu v5e1), which
+# ships only jax/keras/numpy (NO tensorflow). Established 2026-06-15 after a long
+# dependency fight; see colab-tpu-workflow notes + EXPERIMENT_LOG.
+#
+#   colab --auth=adc install -s <session> -r requirements-colab.txt
+#
+# Hard-won facts baked into these pins:
+#   - tensorflow-cpu 2.20.0 has a BROKEN wheel on py3.12 (undefined symbol in the
+#     tflite metrics wrapper). 2.19.1 works with keras 3.13 + numpy 2.
+#   - The lean image's protobuf pulls the ANCIENT system pkg_resources, which uses
+#     pkgutil.ImpImporter (removed in py3.12) -> ImportError on `import tensorflow`.
+#     setuptools==70.3.0 ships a py3.12-compatible pkg_resources into local
+#     site-packages that shadows the broken system one. Modern setuptools (80+)
+#     REMOVED pkg_resources, so do NOT just `-U setuptools`.
+#   - keras-hub is NOT needed for the hybrid backbone (the default/production model)
+#     -- it's a lazy import used ONLY by create_densenet_backbone. Installing it drags
+#     transformers/datasets/tokenizers (most of the install weight + resolver churn).
+#     Add it ONLY for densenet runs.
+#   - wandb optional; omit and use `--no-wandb` to read eval from stdout.
+
+setuptools==70.3.0
+tensorflow-cpu==2.19.1
+# keras-hub          # ONLY if backbone=densenet (drags transformers/datasets)
+# wandb              # ONLY if logging to W&B (else --no-wandb)

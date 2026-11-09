@@ -1,0 +1,23 @@
+[project]
+name = "et-web-export"
+version = "0.1.0"
+# 3.12, not 3.13: onnx 1.17.0 publishes no cp313 wheels, so 3.13 silently builds it
+# from source -- slow on a Mac, and a cmake failure on a CI runner. The <1.18 pin is
+# the one worth keeping: model 1.0.0 was exported with onnx 1.17.0, and the toolchain
+# is part of what makes the bytes reproducible.
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "tensorflow==2.20.0",
+    "keras==3.14.1",
+    "tf2onnx==1.16.1",
+    "onnx>=1.16,<1.18",
+    "onnxruntime>=1.20",
+    "numpy",
+    "opencv-python",
+    "mediapipe==0.10.35",
+    "wandb",
+    "h5py",
+]
+
+[tool.uv]
+override-dependencies = ["protobuf>=5.28,<7"]

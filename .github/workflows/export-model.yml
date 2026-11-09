@@ -1,0 +1,167 @@
+name: Export model
+
+# Stage one of the promotion pipeline in web/ARCHITECTURE.md: take a W&B run, build the
+# ONNX bundle, gate it, propose a version, and hand back an artifact. It stops short of
+# touching jspsych/saccadejs -- opening that PR needs a cross-repo token and a held-out
+# eval gate, neither of which exists yet.
+#
+# Manual on purpose. Which run gets promoted is a judgement call, and no event in this
+# repo corresponds to "a new model exists" (training happens on Colab).
+
+on:
+  workflow_dispatch:
+    inputs:
+      wandb_run:
+        description: "W&B run id holding the checkpoint"
+        required: true
+        default: kwppnkuj
+      wandb_entity:
+        description: "W&B entity"
+        required: true
+        default: vassar-cogsci-lab
+      wandb_project:
+        description: "W&B project"
+        required: true
+        default: eye-tracking-multiframe
+      releases_url:
+        description: "Registry to diff the export against"
+        required: true
+        default: https://raw.githubusercontent.com/jspsych/saccadejs/main/packages/core/models/releases.json
+
+permissions:
+  contents: read
+
+# One export at a time; never cancel one in flight.
+concurrency:
+  group: export-model
+  cancel-in-progress: false
+
+jobs:
+  export:
+    name: export + gate
+    # linux/x86_64 is a hard requirement, not a preference: the arm64 opencv-python wheels
+    # ship the KleidiCV HAL, whose resize/CLAHE deviate from the portable C++ path the
+    # training pipeline ran on by up to 3 gray levels. Fixtures built there would look like
+    # a bug in the saccade.js TS port. Making CI the only thing that publishes removes that
+    # failure mode instead of documenting it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      KERAS_BACKEND: tensorflow
+      PYTHONPATH: .
+      TF_CPP_MIN_LOG_LEVEL: "3"
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+      WANDB_ENTITY: ${{ inputs.wandb_entity }}
+      WANDB_PROJECT: ${{ inputs.wandb_project }}
+      WANDB_RUN: ${{ inputs.wandb_run }}
+      PY: web/export/.venv/bin/python
+      # The run the tracked .npy parity fixtures were generated from; only for that run is
+      # a byte-for-byte comparison against them meaningful.
+      FIXTURE_RUN: kwppnkuj
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Runner is x86_64
+        run: |
+          arch="$(uname -m)"
+          echo "arch: $arch"
+          [ "$arch" = "x86_64" ] || { echo "::error::export must run on x86_64"; exit 1; }
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: web/export/uv.lock
+
+      # --frozen: install exactly what uv.lock pins, and fail rather than re-resolve. A
+      # publisher should build the same bundle in six months as it does today.
+      - name: Install the export environment
+        run: uv sync --project web/export --frozen
+
+      - name: Download checkpoint
+        run: $PY web/export/download_checkpoint.py
+
+      - name: Export ONNX
+        run: $PY web/export/export_onnx.py
+
+      # The export used to be a different file every time -- tf2onnx numbers generated
+      # nodes from a process counter and embeds id() values in einsum names, so the same
+      # weights produced a different sha256 on every run. canonicalize() in export_onnx.py
+      # removes that; this keeps it removed, because the sha256 is what a participant's
+      # data records as the model they saw.
+      - name: Export is byte-reproducible
+        run: |
+          cp web/export/out/models/eye_embedding.onnx "$RUNNER_TEMP/first.onnx"
+          $PY web/export/export_onnx.py > "$RUNNER_TEMP/second.log" 2>&1 \
+            || { cat "$RUNNER_TEMP/second.log"; exit 1; }
+          a=$(sha256sum "$RUNNER_TEMP/first.onnx" | cut -d' ' -f1)
+          b=$(sha256sum web/export/out/models/eye_embedding.onnx | cut -d' ' -f1)
+          echo "first  $a"
+          echo "second $b"
+          [ "$a" = "$b" ] || { echo "::error::the export is not reproducible"; exit 1; }
+
+      - name: Model I/O + ridge fixtures
+        run: $PY web/export/make_fixtures.py --no-camera
+
+      # THE GATE: onnxruntime-CPU vs Keras, max-abs < 1e-4. Exits non-zero on its own.
+      - name: Parity gate (ORT vs Keras)
+        run: $PY web/export/check_parity_ort.py
+
+      # Self-consistency above only proves the ONNX matches the Keras model in this run.
+      # For the run the committed fixtures came from we can do better and check the Keras
+      # side has not drifted either.
+      - name: Tracked parity fixtures have not drifted
+        run: |
+          if [ "$WANDB_RUN" != "$FIXTURE_RUN" ]; then
+            echo "run $WANDB_RUN is not $FIXTURE_RUN; the committed fixtures describe a"
+            echo "different checkpoint, so there is nothing to compare. Skipped."
+            exit 0
+          fi
+          git show HEAD:web/export/fixtures/model_inputs.npy > "$RUNNER_TEMP/base_inputs.npy"
+          git show HEAD:web/export/fixtures/model_embeddings.npy > "$RUNNER_TEMP/base_embeddings.npy"
+          $PY - <<'EOF'
+          import os, sys
+          import numpy as np
+          tmp, fix = os.environ["RUNNER_TEMP"], "web/export/fixtures"
+          xi, xe = np.load(f"{fix}/model_inputs.npy"), np.load(f"{fix}/model_embeddings.npy")
+          bi, be = np.load(f"{tmp}/base_inputs.npy"), np.load(f"{tmp}/base_embeddings.npy")
+          if xi.shape != bi.shape or not np.array_equal(xi, bi):
+              sys.exit("FAIL: regenerated inputs differ from the committed fixture "
+                       "(they are seeded uint8 and must be identical)")
+          d = np.abs(xe - be).max()
+          print(f"embedding max-abs vs committed fixture: {d:.3e}")
+          # Looser than nothing, tighter than the parity gate: a different TF build may
+          # shuffle the last bits, but a real Keras-side change would not be this small.
+          sys.exit(0 if d < 1e-5 else f"FAIL: Keras embeddings drifted ({d:.3e} >= 1e-5)")
+          EOF
+
+      # Runs here, and only here, with an OpenCV whose imgproc is the portable C++ path --
+      # the generators' CRC guard aborts otherwise.
+      - name: Preprocessing fixtures
+        run: $PY web/export/make_preproc_fixtures.py
+
+      - name: Propose a version
+        run: $PY web/export/propose_version.py --releases "${{ inputs.releases_url }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Export \`$WANDB_ENTITY/$WANDB_PROJECT/$WANDB_RUN\`"
+            echo
+            echo '```json'
+            cat web/export/out/generated/version_proposal.json 2>/dev/null \
+              || echo '{"decision": "not reached"}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eye-embedding-${{ inputs.wandb_run }}
+          if-no-files-found: warn
+          path: |
+            web/export/out/models/eye_embedding.onnx
+            web/export/out/generated/
+            web/export/fixtures/preproc/
+            web/export/fixtures/ridge_fixture.json

@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The fast gate: catches the KERAS_BACKEND ordering regression with no heavy
+  # dependencies at all, so it reports in seconds even when the full job is slow.
+  guard:
+    name: import-order guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: KERAS_BACKEND setdefault precedes every import
+        run: pytest tests/test_keras_backend.py -q -k setdefault_precedes
+
+  python:
+    name: python (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      # Installs the package itself, so a dependency that is imported but not
+      # declared fails here rather than silently on someone's machine.
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Tests
+        run: pytest tests/ -q
+      - name: Package builds and imports under both backends
+        run: |
+          KERAS_BACKEND=tensorflow python -c "
+          import et_util, importlib.metadata as md
+          from et_util.config import TrainConfig
+          from et_util.models import create_masked_model
+          m = create_masked_model(TrainConfig())
+          n = m.count_params()
+          assert n == 5198273, f'param count changed: {n}'
+          assert md.version('eye-tracking') == et_util.__version__
+          print('OK', n, et_util.__version__)
+          "
+
+  rig-panel:
+    name: rig panel
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/rig/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/rig/panel/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  parity:
+    name: export parity page
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/export/parity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/export/parity/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # Builds from a clean checkout: the page no longer imports the generated
+      # manifest, so it needs nothing out of the gitignored out/ tree. Actually
+      # *running* the parity comparison needs an exported .onnx and is the
+      # publisher workflow's job, not this one's.
+      - run: npm run build

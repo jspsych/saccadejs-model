@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ONNX Parity Check</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #111;
+        color: #eee;
+        font: 13px/1.5 ui-monospace, monospace;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size: 15px; margin: 0 0 12px">ONNX parity: webgpu vs wasm vs Keras fixtures</h1>
+    <pre id="out">running…</pre>
+    <script type="module" src="/src/parity.ts"></script>
+  </body>
+</html>
